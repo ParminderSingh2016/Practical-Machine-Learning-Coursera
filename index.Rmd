@@ -1,0 +1,177 @@
+---
+title: "Practical Machine Learning"
+author: "Parminder Singh"
+date: "April 9, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [link][http://groupware.les.inf.puc-rio.br/har] 
+(see the section on the Weight Lifting Exercise Dataset).
+
+##Data
+The training data for this project are available here: [link][https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv]
+
+The test data are available here: [link][https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv]
+
+The data for this project come from this source: [link][http://groupware.les.inf.puc-rio.br/har]. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+##Preliminary Work
+
+###Reproducibility 
+An overall pseudo-random number generator seed was set at 15151 for all code. In order to reproduce the results below, the same seed should be used. Different packages were downloaded and installed, such as caret and randomForest.
+
+###How the model was built
+
+Our outcome variable is class, a factor variable with 5 levels. For this data set, "participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
+
+1. Exactly according to the specification (Class A)
+
+2. Throwing the elbows to the front (Class B)
+
+3. Lifting the dumbbell only halfway (Class C)
+
+4. Lowering the dumbbell only halfway (Class D)
+
+5. Throwing the hips to the front (Class E)
+
+###Cross-validation
+Cross-validation will be performed by subsampling our training data set randomly without replacement into 2 subsamples: subTraining data (75% of the original Training data set) and subTesting data (25%). Our models will be fitted on the subTraining data set, and tested on the subTesting data. Once the most accurate model is choosen, it will be tested on the original Testing data set.
+
+###Expected out-of-sample error
+The expected out-of-sample error will correspond to the quantity: 1-accuracy in the cross-validation data. Accuracy is the proportion of correct classified observation over the total sample in the subTesting data set. Expected accuracy is the expected accuracy in the out-of-sample data set (i.e. original testing data set). Thus, the expected value of the out-of-sample error will correspond to the expected number of missclassified observations/total observations in the Test data set, which is the quantity: 1-accuracy found from the cross-validation data set.
+
+Our outcome variable "class" is an unordered factor variable. Thus, we can choose our error type as 1-accuracy. We have a large sample size with N= 19622 in the Training data set. This allow us to divide our Training sample into subTraining and subTesting to allow cross-validation. Features with all missing values will be discarded as well as features that are irrelevant. All other features will be kept as relevant variables. Decision tree and random forest algorithms are known for their ability of detecting the features that are important for classification.
+
+###Packages, Libraries and Seed
+
+Installing packages, loading libraries, and setting the seed for reproduceability:
+
+```{r}
+library(lattice);
+```
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+library(caret)
+```
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+library(rattle)
+```
+
+```{r}
+library(rpart)
+```
+
+```{r}
+library(rpart.plot)
+```
+
+```{r}
+library(RColorBrewer)
+```
+
+
+
+```{r}
+set.seed(15151)
+```
+
+##Getting and cleaning data
+
+Load data to memory.
+```{r}
+# Loading the training data set into my R session replacing all missing with "NA"
+
+training <- read.csv("pml-training.csv",na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv("pml-testing.csv",na.strings=c("NA","#DIV/0!",""))
+
+```
+
+##Preliminary Cleaning
+
+```{r}
+# Delete columns with all missing values
+training<-training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+
+# Some variables are irrelevant to our current project: user_name, raw_timestamp_part_1, raw_timestamp_part_,2 cvtd_timestamp, new_window, and  num_window (columns 1 to 7). We can delete these variables.
+training   <-training[,-c(1:7)]
+testing <-testing[,-c(1:7)]
+
+# and have a look at our new datasets:
+dim(training)
+dim(testing)
+```
+
+
+##Partioning the training set into two
+Partioning Training data set into two data sets, 60% for myTraining, 40% for myTesting-
+
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+myTraining <- training[inTrain, ]; 
+myTesting <- training[-inTrain, ]
+dim(myTraining); dim(myTesting)
+```
+
+
+###A look at the Data
+
+The variable "class" contains 5 levels: A, B, C, D and E. A plot of the outcome variable will allow us to see the frequency of each levels in the subTraining data set and compare one another.
+
+```{r}
+plot(myTraining$classe, col="red", main="Bar Plot of levels of the variable classe within the subTraining data set", xlab="classe levels", ylab="Frequency")
+```
+
+##Using ML algorithms for prediction: Decision Tree
+```{r}
+modFitA1 <- rpart(classe ~ ., data=myTraining, method="class")
+fancyRpartPlot(modFitA1)
+```
+
+##Predicting
+```{r}
+predictionsA1 <- predict(modFitA1, myTesting, type = "class")
+```
+
+Using confusion Matrix to test results:
+```{r}
+confusionMatrix(predictionsA1, myTesting$classe)
+```
+
+Random Forests yielded better Results.
+
+##Generating Files to submit as Answers
+Finally, using the provided Test Set out-of-sample error.
+
+For Random Forests we use the following formula, which yielded a much better prediction in in-sample:
+
+```{r}
+modFitB1 <- randomForest(classe ~. , data=myTraining)
+predictionsB2 <- predict(modFitB1, testing, type = "class")
+```
+Function to generate files with predictions to submit for assignment
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictionsB2)
+```
